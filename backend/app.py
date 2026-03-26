@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import numpy as np
 import os
@@ -136,6 +136,10 @@ THRESHOLDS = {
 
 @app.route("/")
 def index():
+    return send_from_directory('../frontend', 'index.html')
+
+@app.route('/api/status')
+def api_status():
     return jsonify({
         "status":    "NH3 Monitor API running",
         "version":   "2.0",
