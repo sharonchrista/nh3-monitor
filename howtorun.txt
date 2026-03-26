@@ -1,0 +1,33 @@
+WhatWhere to see it
+Live dashboard http://127.0.0.1:5000
+ML model info http://127.0.0.1:5000/model_info
+Raw API predict http://127.0.0.1:5000/predict
+Logged readings D:\nh3_monitor\data\raw\readings.csv
+GitHub repo github.com/sharonchrista/nh3-monitor
+
+
+cd D:\nh3_monitor
+.\venv\Scripts\Activate.ps1
+
+cd backend
+python app.py
+
+Chrome: http://127.0.0.1:5000
+
+
+Run IoT simulator
+D:
+cd D:\nh3_monitor
+.\venv\Scripts\Activate.ps1
+cd iot_simulator
+python simulate.py
+
+Retrain model on new data
+D:
+cd D:\nh3_monitor
+.\venv\Scripts\Activate.ps1
+cd ml
+python generate_data.py
+python train_model.py
+
+
