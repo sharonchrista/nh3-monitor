@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NH₃ Monitor — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#0b0d0c;--bg2:#111412;--bg3:#181c19;--bg4:#1e2320;
+  --line:rgba(255,255,255,0.06);--line2:rgba(255,255,255,0.11);
+  --text:#dde8da;--text2:#7a9070;--text3:#405038;
+  --green:#3ae880;--gbg:rgba(58,232,128,0.08);--gbdr:rgba(58,232,128,0.3);
+  --amber:#f0b040;--abg:rgba(240,176,64,0.08);--abdr:rgba(240,176,64,0.3);
+  --red:#f04848;--rbg:rgba(240,72,72,0.08);--rbdr:rgba(240,72,72,0.3);
+  --blue:#48b8f0;--bbg:rgba(72,184,240,0.08);
+  --purple:#a080f8;--pbg:rgba(160,128,248,0.08);--pbdr:rgba(160,128,248,0.3);
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+  --r:7px;--rl:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;}
+
+.topbar{height:54px;background:var(--bg2);border-bottom:1px solid var(--line2);display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:12px;}
+.brand{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.04em;}
+.brand em{color:var(--green);font-style:normal;}
+.tb-right{display:flex;align-items:center;gap:14px;}
+.live{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--green);}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pk 2s infinite;}
+@keyframes pk{0%,100%{opacity:1}50%{opacity:.2}}
+.clk{font-family:var(--mono);font-size:11px;color:var(--text3);}
+.api-status{font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:99px;border:1px solid;transition:all .3s;}
+.api-ok{border-color:var(--gbdr);background:var(--gbg);color:var(--green);}
+.api-err{border-color:var(--rbdr);background:var(--rbg);color:var(--red);}
+
+.shell{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 54px);}
+@media(max-width:800px){.shell{grid-template-columns:1fr;}}
+
+.sidebar{background:var(--bg2);border-right:1px solid var(--line2);padding:14px;overflow-y:auto;}
+.sec{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--text3);text-transform:uppercase;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line);}
+.sec:first-child{margin-top:0;}
+.sensor-blk{background:var(--bg3);border-radius:var(--r);padding:9px 11px;margin-bottom:6px;border-left:3px solid var(--line2);transition:border-color .3s;}
+.sensor-blk.live{border-left-color:var(--green);}
+.sb-row{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.sb-lbl{font-size:11px;color:var(--text2);font-family:var(--mono);}
+.sb-st{font-size:9px;padding:2px 6px;border-radius:99px;}
+.st-live{background:var(--gbg);color:var(--green);border:1px solid var(--gbdr);}
+.st-man{background:var(--bg4);color:var(--text3);}
+.sb-inp{width:100%;background:transparent;border:none;border-bottom:1px solid var(--line2);font-family:var(--mono);font-size:16px;font-weight:500;color:var(--text);outline:none;padding:2px 0;margin-top:4px;}
+.sb-inp:focus{border-bottom-color:var(--green);}
+.sb-note{font-size:10px;color:var(--text3);margin-top:3px;}
+.ctrl{margin-bottom:7px;}
+.ctrl label{display:block;font-size:11px;color:var(--text2);margin-bottom:3px;font-family:var(--mono);}
+select,input[type=number]{width:100%;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);color:var(--text);font-family:var(--sans);font-size:13px;padding:6px 8px;outline:none;}
+select:focus,input:focus{border-color:rgba(58,232,128,.4);}
+
+.main{padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+
+.hero{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+@media(max-width:600px){.hero{grid-template-columns:1fr;}}
+.pred-card{background:var(--bg2);border:1px solid var(--line2);border-radius:var(--rl);padding:16px;border-top:2px solid var(--line2);transition:border-top-color .4s;}
+.pc-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:8px;}
+.pc-val{font-family:var(--mono);font-size:32px;font-weight:500;line-height:1;transition:color .4s;}
+.pc-unit{font-size:11px;color:var(--text2);margin:3px 0 10px;}
+.pc-bar-wrap{position:relative;margin:8px 0;}
+.pc-bar-track{height:5px;background:var(--bg4);border-radius:3px;}
+.pc-bar-fill{height:5px;border-radius:3px;transition:width .6s ease,background .4s;}
+.pc-thresh{position:absolute;top:-3px;width:2px;height:11px;background:var(--red);border-radius:1px;opacity:.8;}
+.pc-sub{font-size:11px;color:var(--text2);font-family:var(--mono);line-height:1.5;}
+.pc-badge{display:inline-block;font-size:11px;font-weight:500;padding:3px 10px;border-radius:99px;margin-top:8px;}
+.bd-ok{background:var(--gbg);color:var(--green);border:1px solid var(--gbdr);}
+.bd-warn{background:var(--abg);color:var(--amber);border:1px solid var(--abdr);}
+.bd-crit{background:var(--rbg);color:var(--red);border:1px solid var(--rbdr);}
+
+.chart-card{background:var(--bg2);border:1px solid var(--line2);border-radius:var(--rl);padding:16px;}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.card-title{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;}
+.model-tag{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:99px;background:var(--pbg);color:var(--purple);border:1px solid var(--pbdr);}
+.surge-alert{display:none;background:var(--rbg);border:1px solid var(--rbdr);border-radius:var(--r);padding:10px 13px;margin-bottom:10px;font-size:12px;color:var(--red);line-height:1.6;}
+.surge-alert.show{display:block;}
+.chart-wrap{position:relative;height:160px;}
+.chart-legend{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;}
+.cl-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
+.cl-line{width:18px;height:2px;border-radius:1px;}
+
+.feat-card{background:var(--bg2);border:1px solid var(--line2);border-radius:var(--rl);padding:14px;}
+.feat-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.feat-name{font-size:11px;color:var(--text2);min-width:200px;flex-shrink:0;}
+.feat-track{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;}
+.feat-fill{height:4px;border-radius:2px;transition:width .5s ease;}
+.feat-val{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:40px;text-align:right;}
+
+.log-card{background:var(--bg2);border:1px solid var(--line2);border-radius:var(--rl);padding:14px;max-height:200px;overflow-y:auto;}
+.log-row{display:flex;gap:10px;align-items:baseline;padding:4px 0;border-bottom:.5px solid var(--line);font-family:var(--mono);font-size:11px;}
+.log-row:last-child{border:none;}
+.log-t{color:var(--text3);flex-shrink:0;}
+.log-m{color:var(--text2);flex:1;}
+.log-s{flex-shrink:0;font-weight:500;}
+
+.actual-form{background:var(--bg2);border:1px solid var(--line2);border-radius:var(--rl);padding:14px;}
+.actual-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;}
+.actual-grid label{font-size:11px;color:var(--text2);font-family:var(--mono);display:block;margin-bottom:3px;}
+.actual-grid input{background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:13px;padding:7px 9px;outline:none;width:100%;}
+.actual-grid input:focus{border-color:var(--green);}
+.log-btn{padding:7px 16px;background:var(--green);color:#0b0d0c;border:none;border-radius:var(--r);font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.log-btn:hover{opacity:.85;}
+
+.disclaimer{font-size:11px;color:var(--text3);line-height:1.6;padding:10px 13px;border:1px dashed var(--line2);border-radius:var(--r);font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">NH₃<em>.</em>MONITOR <span style="opacity:.4;font-weight:300;margin-left:8px;">live dashboard</span></div>
+  <div class="tb-right">
+    <div class="live"><div class="pulse"></div>LIVE</div>
+    <div class="clk" id="clk">--:--:--</div>
+    <div class="api-status api-err" id="apiStatus">API connecting...</div>
+  </div>
+</div>
+
+<div class="shell">
+<div class="sidebar">
+
+  <div class="sec">Sensor inputs</div>
+  <div class="sensor-blk" id="blk-temp">
+    <div class="sb-row"><span class="sb-lbl">Temperature °C</span><span class="sb-st st-man">manual</span></div>
+    <input class="sb-inp" id="sv-temp" type="number" step="0.1" value="28" oninput="scheduleUpdate()">
+    <div class="sb-note">DS18B20 · ₹100–180</div>
+  </div>
+  <div class="sensor-blk" id="blk-ph">
+    <div class="sb-row"><span class="sb-lbl">pH</span><span class="sb-st st-man">manual</span></div>
+    <input class="sb-inp" id="sv-ph" type="number" step="0.1" value="7.5" oninput="scheduleUpdate()">
+    <div class="sb-note">DFRobot · ₹800–1,200</div>
+  </div>
+  <div class="sensor-blk" id="blk-turb">
+    <div class="sb-row"><span class="sb-lbl">Turbidity NTU</span><span class="sb-st st-man">manual</span></div>
+    <input class="sb-inp" id="sv-turb" type="number" step="1" value="25" oninput="scheduleUpdate()">
+    <div class="sb-note">TSW-20 · ₹300–500</div>
+  </div>
+  <div class="sensor-blk" id="blk-cons">
+    <div class="sb-row"><span class="sb-lbl">Feed consumption %</span><span class="sb-st st-man">load cell</span></div>
+    <input class="sb-inp" id="sv-cons" type="number" step="1" value="82" min="0" max="100" oninput="scheduleUpdate()">
+    <div class="sb-note">HX711 load cell · ₹350–600</div>
+  </div>
+  <div class="sensor-blk" id="blk-vib">
+    <div class="sb-row"><span class="sb-lbl">Vibration pulses/30s</span><span class="sb-st st-man">SW-420</span></div>
+    <input class="sb-inp" id="sv-vib" type="number" step="1" value="75" min="0" max="120" oninput="scheduleUpdate()">
+    <div class="sb-note">3× piezo sensors · ₹50–100</div>
+  </div>
+
+  <div class="sec">Farm management</div>
+  <div class="ctrl"><label>Species</label>
+    <select id="species" onchange="scheduleUpdate()">
+      <option value="shrimp">White leg shrimp (vannamei)</option>
+      <option value="tilapia">Tilapia</option>
+      <option value="catfish">Catfish</option>
+      <option value="carp">Carp</option>
+      <option value="milkfish">Milkfish</option>
+    </select>
+  </div>
+  <div class="ctrl"><label>Stocking density (animals/m²)</label>
+    <input type="number" id="density" value="30" min="1" oninput="scheduleUpdate()">
+  </div>
+  <div class="ctrl"><label>Production day</label>
+    <input type="number" id="days" value="45" min="1" oninput="scheduleUpdate()">
+  </div>
+  <div class="ctrl"><label>Feed protein</label>
+    <select id="protein" onchange="scheduleUpdate()">
+      <option value="0">Low 25–30%</option>
+      <option value="1" selected>Medium 32–38%</option>
+      <option value="2">High 40–45%</option>
+    </select>
+  </div>
+  <div class="ctrl"><label>Days since water exchange</label>
+    <input type="number" id="wex" value="3" min="0" oninput="scheduleUpdate()">
+  </div>
+  <div class="ctrl"><label>System type</label>
+    <select id="system" onchange="scheduleUpdate()">
+      <option value="0">Earthen pond</option>
+      <option value="1">Biofloc</option>
+      <option value="2">RAS (indoor)</option>
+    </select>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="hero">
+    <div class="pred-card" id="card-tan">
+      <div class="pc-lbl">Predicted TAN</div>
+      <div class="pc-val" id="pv-tan">—</div>
+      <div class="pc-unit">mg/L total ammonia nitrogen</div>
+      <div class="pc-bar-wrap">
+        <div class="pc-bar-track">
+          <div class="pc-bar-fill" id="pbar-tan" style="width:0%"></div>
+          <div class="pc-thresh" id="thresh-tan" style="left:40%"></div>
+        </div>
+      </div>
+      <div class="pc-sub" id="ci-tan">95% CI: —</div>
+      <div class="pc-badge bd-ok" id="badge-tan">—</div>
+    </div>
+
+    <div class="pred-card" id="card-nh3">
+      <div class="pc-lbl">Free NH₃ (toxic fraction)</div>
+      <div class="pc-val" id="pv-nh3">—</div>
+      <div class="pc-unit">mg/L · Emerson formula</div>
+      <div class="pc-bar-wrap">
+        <div class="pc-bar-track">
+          <div class="pc-bar-fill" id="pbar-nh3" style="width:0%;background:var(--blue)"></div>
+          <div class="pc-thresh" id="thresh-nh3" style="left:40%"></div>
+        </div>
+      </div>
+      <div class="pc-sub" id="ci-nh3">pH: — · temp: —°C</div>
+      <div class="pc-badge bd-ok" id="badge-nh3">—</div>
+    </div>
+
+    <div class="pred-card" id="card-surge">
+      <div class="pc-lbl">Surge forecast</div>
+      <div class="pc-val" id="pv-surge">—</div>
+      <div class="pc-unit" id="pu-surge">hours to threshold</div>
+      <div class="pc-sub" id="surge-detail" style="margin-top:8px;line-height:1.6;">Waiting for API...</div>
+      <div class="pc-badge bd-ok" id="badge-surge">—</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="card-head">
+      <div class="card-title">TAN trajectory — current + 12h forecast</div>
+      <div class="model-tag">Flask API · nitrogen budget model</div>
+    </div>
+    <div class="surge-alert" id="surgeAlert">Surge alert: TAN will exceed safe limit within the forecast window. Initiate water exchange (20–30%) and reduce feed by 30% immediately.</div>
+    <div class="chart-wrap"><canvas id="fc"></canvas></div>
+    <div class="chart-legend">
+      <div class="cl-item"><div class="cl-line" style="background:var(--green)"></div>Current TAN</div>
+      <div class="cl-item"><div class="cl-line" style="background:var(--purple);border-top:2px dashed var(--purple);height:0"></div>12h forecast</div>
+      <div class="cl-item"><div class="cl-line" style="background:var(--red)"></div>Safe limit</div>
+    </div>
+  </div>
+
+  <div class="feat-card">
+    <div class="card-head"><div class="card-title">Risk factor breakdown</div></div>
+    <div id="featList" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="actual-form">
+    <div class="card-title" style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:10px;">Log actual ammonia reading (test kit) — builds training dataset</div>
+    <div class="actual-grid">
+      <div>
+        <label>Actual TAN (mg/L from test kit)</label>
+        <input type="number" id="actualTAN" step="0.01" placeholder="e.g. 1.45" min="0">
+      </div>
+      <div>
+        <label>Notes</label>
+        <input type="text" id="logNote" placeholder="e.g. after feeding, rainy">
+      </div>
+      <button class="log-btn" onclick="logReading()">Log reading</button>
+    </div>
+  </div>
+
+  <div class="log-card">
+    <div class="card-title" style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">Session log</div>
+    <div id="logList"><div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:12px;">No events yet</div></div>
+  </div>
+
+  <div class="disclaimer">
+    // Backend: Flask API at http://127.0.0.1:5000 · Nitrogen budget model · Emerson 1975 NH₃ formula<br>
+    // IoT ready: ESP32 → POST http://127.0.0.1:5000/sensor · Data logged to data/raw/readings.csv<br>
+    // Next: train XGBoost on logged readings → replace estimate_tan() with model.predict()
+  </div>
+</div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:5000";
+let forecastChart = null;
+let updateTimer = null;
+let lastPrediction = null;
+const sessionLog = [];
+
+// ── Clock ─────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clk').textContent = new Date().toTimeString().slice(0,8);
+}, 1000);
+
+// ── API health check ──────────────────────────────────────────
+async function checkAPI() {
+  try {
+    const r = await fetch(`${API}/health`, { method:'GET' });
+    if (r.ok) {
+      document.getElementById('apiStatus').textContent = 'API connected';
+      document.getElementById('apiStatus').className = 'api-status api-ok';
+      return true;
+    }
+  } catch(e) {}
+  document.getElementById('apiStatus').textContent = 'API offline';
+  document.getElementById('apiStatus').className = 'api-status api-err';
+  return false;
+}
+setInterval(checkAPI, 5000);
+checkAPI();
+
+// ── Debounced update — fires 400ms after last input change ────
+function scheduleUpdate() {
+  clearTimeout(updateTimer);
+  updateTimer = setTimeout(callAPI, 400);
+}
+
+// ── Build payload from sidebar inputs ─────────────────────────
+function getPayload() {
+  return {
+    species:  document.getElementById('species').value,
+    temp:     parseFloat(document.getElementById('sv-temp').value) || 28,
+    ph:       parseFloat(document.getElementById('sv-ph').value)   || 7.5,
+    turb:     parseFloat(document.getElementById('sv-turb').value) || 25,
+    cons:     parseFloat(document.getElementById('sv-cons').value) || 80,
+    vib:      parseFloat(document.getElementById('sv-vib').value)  || 70,
+    density:  parseFloat(document.getElementById('density').value) || 30,
+    days:     parseFloat(document.getElementById('days').value)    || 45,
+    protein:  parseFloat(document.getElementById('protein').value),
+    wex:      parseFloat(document.getElementById('wex').value)     || 3,
+    system:   parseFloat(document.getElementById('system').value),
+  };
+}
+
+// ── Call Flask API ────────────────────────────────────────────
+async function callAPI() {
+  const payload = getPayload();
+  try {
+    const r = await fetch(`${API}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    lastPrediction = { ...payload, predicted_tan: d.tan };
+    updateUI(d, payload);
+    addLog(`TAN ${d.tan} mg/L · ${d.status.toUpperCase()} · breach in ${d.hours_to_breach ? d.hours_to_breach+'h' : 'none'}`, d.status);
+  } catch(e) {
+    addLog('API call failed — is Flask running?', 'error');
+  }
+}
+
+// ── Update all UI elements ─────────────────────────────────────
+function updateUI(d, p) {
+  const tanMax = d.threshold_tan * 2.5;
+  const tanPct = Math.min(100, (d.tan / tanMax) * 100);
+  const thPct  = Math.min(98,  (d.threshold_tan / tanMax) * 100);
+  const tanCol = d.status === 'critical' ? 'var(--red)' : d.status === 'warning' ? 'var(--amber)' : 'var(--green)';
+
+  // TAN card
+  document.getElementById('pv-tan').textContent = d.tan.toFixed(2);
+  document.getElementById('pv-tan').style.color = tanCol;
+  document.getElementById('pbar-tan').style.width = tanPct + '%';
+  document.getElementById('pbar-tan').style.background = tanCol;
+  document.getElementById('thresh-tan').style.left = thPct + '%';
+  document.getElementById('ci-tan').textContent = `95% CI: ${d.tan_ci_low}–${d.tan_ci_high} mg/L · limit: ${d.threshold_tan} mg/L`;
+  document.getElementById('card-tan').style.borderTopColor = tanCol;
+  const bt = document.getElementById('badge-tan');
+  bt.textContent = d.status === 'critical' ? 'above safe limit' : d.status === 'warning' ? 'approaching limit' : 'within safe range';
+  bt.className = 'pc-badge ' + (d.status === 'critical' ? 'bd-crit' : d.status === 'warning' ? 'bd-warn' : 'bd-ok');
+
+  // NH3 card
+  const nh3Max = d.threshold_free * 2.5;
+  const nh3Col = d.free_nh3 > d.threshold_free ? 'var(--red)' : 'var(--blue)';
+  document.getElementById('pv-nh3').textContent = d.free_nh3.toFixed(4);
+  document.getElementById('pv-nh3').style.color = nh3Col;
+  document.getElementById('pbar-nh3').style.width = Math.min(100, (d.free_nh3/nh3Max)*100) + '%';
+  document.getElementById('pbar-nh3').style.background = nh3Col;
+  document.getElementById('thresh-nh3').style.left = Math.min(98,(d.threshold_free/nh3Max)*100) + '%';
+  document.getElementById('ci-nh3').textContent = `pH ${p.ph} · ${p.temp}°C · ${d.nh3_fraction_pct}% of TAN as free NH₃`;
+  document.getElementById('card-nh3').style.borderTopColor = nh3Col;
+  const bn = document.getElementById('badge-nh3');
+  bn.textContent = d.free_nh3 > d.threshold_free ? 'toxic — exceeds limit' : 'non-toxic';
+  bn.className = 'pc-badge ' + (d.free_nh3 > d.threshold_free ? 'bd-crit' : 'bd-ok');
+
+  // Surge card
+  const pvS = document.getElementById('pv-surge');
+  const bs  = document.getElementById('badge-surge');
+  const sd  = document.getElementById('surge-detail');
+  if (d.tan >= d.threshold_tan) {
+    pvS.textContent = 'NOW'; pvS.style.color = 'var(--red)';
+    bs.className='pc-badge bd-crit'; bs.textContent='threshold breached';
+    sd.textContent = 'Immediate action: exchange 20–30% water + cut feed by 30%.';
+    document.getElementById('pu-surge').textContent = 'TAN above safe limit';
+  } else if (d.hours_to_breach && d.hours_to_breach <= 6) {
+    pvS.textContent = d.hours_to_breach+'h'; pvS.style.color = 'var(--red)';
+    bs.className='pc-badge bd-crit'; bs.textContent='surge imminent';
+    sd.textContent = `Forecast peak: ${d.forecast_peak} mg/L. Plan water exchange within ${Math.ceil(d.hours_to_breach/2)}h.`;
+    document.getElementById('pu-surge').textContent = 'to threshold';
+  } else if (d.hours_to_breach) {
+    pvS.textContent = d.hours_to_breach+'h'; pvS.style.color = 'var(--amber)';
+    bs.className='pc-badge bd-warn'; bs.textContent='monitor closely';
+    sd.textContent = `Gradual accumulation. Forecast peak: ${d.forecast_peak} mg/L.`;
+    document.getElementById('pu-surge').textContent = 'to threshold';
+  } else {
+    pvS.textContent = '24h+'; pvS.style.color = 'var(--green)';
+    bs.className='pc-badge bd-ok'; bs.textContent='stable';
+    sd.textContent = `Forecast peak: ${d.forecast_peak} mg/L. Current management effective.`;
+    document.getElementById('pu-surge').textContent = 'no surge expected';
+  }
+  document.getElementById('card-surge').style.borderTopColor =
+    (d.tan >= d.threshold_tan || (d.hours_to_breach && d.hours_to_breach <= 6)) ? 'var(--red)' :
+    d.hours_to_breach ? 'var(--amber)' : 'var(--green)';
+
+  // Alert banner
+  document.getElementById('surgeAlert').classList.toggle('show',
+    d.tan >= d.threshold_tan || (d.hours_to_breach && d.hours_to_breach <= 6));
+
+  // Chart
+  updateChart(d);
+
+  // Feature importance
+  const features = [
+    { name:'pH → free NH₃ fraction (Emerson)',    val: 0.22 },
+    { name:'Temperature → nitrification rate',    val: 0.18 },
+    { name:'Stocking density → N load',           val: 0.15 },
+    { name:'Feed consumption % (stress signal)',   val: 0.14 },
+    { name:'Water exchange → dilution',            val: 0.13 },
+    { name:'Turbidity → DO proxy',                val: 0.10 },
+    { name:'Production day → biomass stage',       val: 0.09 },
+    { name:'Feed protein % → N input',            val: 0.08 },
+    { name:'Vibration → feeding activity',         val: 0.07 },
+    { name:'System type → nitrification sink',    val: 0.06 },
+  ];
+  const maxImp = features[0].val;
+  document.getElementById('featList').innerHTML = features.map(f => {
+    const col = f.val > 0.15 ? 'var(--red)' : f.val > 0.10 ? 'var(--amber)' : 'var(--green)';
+    return `<div class="feat-row">
+      <div class="feat-name">${f.name}</div>
+      <div class="feat-track"><div class="feat-fill" style="width:${Math.round(f.val/maxImp*100)}%;background:${col}"></div></div>
+      <div class="feat-val">${(f.val*100).toFixed(0)}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Chart ─────────────────────────────────────────────────────
+function initChart(thresh) {
+  const ctx = document.getElementById('fc').getContext('2d');
+  const now = new Date();
+  const labels = [];
+  for (let i = -3; i <= 12; i++) {
+    labels.push(new Date(now.getTime()+i*3600000).toTimeString().slice(0,5));
+  }
+  forecastChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        { label:'Current', data:new Array(16).fill(null), borderColor:'#3ae880', borderWidth:2, pointRadius:3, pointBackgroundColor:'#3ae880', fill:false, tension:.3 },
+        { label:'Forecast', data:new Array(16).fill(null), borderColor:'#a080f8', borderWidth:2, borderDash:[6,4], pointRadius:2, fill:false, tension:.3 },
+        { label:'Safe limit', data:new Array(16).fill(thresh), borderColor:'#f04848', borderWidth:1, borderDash:[3,3], pointRadius:0, fill:false }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:'#405038', font:{ family:'DM Mono', size:10 } }, grid:{ color:'rgba(255,255,255,0.04)' } },
+        y:{ min:0, ticks:{ color:'#405038', font:{ family:'DM Mono', size:10 } }, grid:{ color:'rgba(255,255,255,0.04)' } }
+      }
+    }
+  });
+}
+
+function updateChart(d) {
+  if (!forecastChart) { initChart(d.threshold_tan); }
+  const now = new Date();
+  const labels = [];
+  for (let i = -3; i <= 12; i++) {
+    labels.push(new Date(now.getTime()+i*3600000).toTimeString().slice(0,5));
+  }
+  const currentData = [d.tan * 0.88, d.tan * 0.94, d.tan, null, ...new Array(12).fill(null)];
+  const forecastData = [...new Array(3).fill(null), d.tan, ...d.forecast];
+  forecastChart.data.labels = labels;
+  forecastChart.data.datasets[0].data = currentData;
+  forecastChart.data.datasets[1].data = forecastData;
+  forecastChart.data.datasets[2].data = new Array(16).fill(d.threshold_tan);
+  forecastChart.update('none');
+}
+
+// ── Log reading to API ────────────────────────────────────────
+async function logReading() {
+  const actual = parseFloat(document.getElementById('actualTAN').value);
+  if (isNaN(actual)) { alert('Enter actual ammonia test result first'); return; }
+  if (!lastPrediction) { alert('Make a prediction first by adjusting any input'); return; }
+  const payload = { ...lastPrediction, actual_tan: actual };
+  try {
+    await fetch(`${API}/log`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    document.getElementById('actualTAN').value = '';
+    document.getElementById('logNote').value = '';
+    addLog(`Reading logged: predicted=${lastPrediction.predicted_tan} actual=${actual} error=${(actual-lastPrediction.predicted_tan).toFixed(2)}`, 'ok');
+  } catch(e) {
+    addLog('Failed to log reading', 'error');
+  }
+}
+
+// ── Session log ───────────────────────────────────────────────
+function addLog(msg, status) {
+  const t = new Date().toTimeString().slice(0,8);
+  const col = status === 'critical' ? 'var(--red)' : status === 'warning' ? 'var(--amber)' : status === 'error' ? 'var(--red)' : 'var(--green)';
+  sessionLog.unshift({ t, msg, col });
+  if (sessionLog.length > 30) sessionLog.pop();
+  document.getElementById('logList').innerHTML = sessionLog.slice(0,10).map(e =>
+    `<div class="log-row"><span class="log-t">${e.t}</span><span class="log-m">${e.msg}</span><span class="log-s" style="color:${e.col}"></span></div>`
+  ).join('');
+}
+
+// ── IoT hook — ESP32 calls this ───────────────────────────────
+window.updateSensor = function(param, value) {
+  const map = { temperature:'sv-temp', temp:'sv-temp', ph:'sv-ph', turbidity:'sv-turb', turb:'sv-turb', consumption:'sv-cons', cons:'sv-cons', vibration:'sv-vib', vib:'sv-vib' };
+  const id = map[param];
+  if (id) {
+    document.getElementById(id).value = value;
+    document.getElementById('blk-'+param.split('').slice(0,4).join('')).classList.add('live');
+  }
+  scheduleUpdate();
+};
+
+// ── Auto-refresh every 30 seconds ────────────────────────────
+setInterval(callAPI, 30000);
+
+// ── Initial load ──────────────────────────────────────────────
+callAPI();
+</script>
+</body>
+</html>
